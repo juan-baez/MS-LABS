@@ -5,7 +5,6 @@
  */
 package com.mysolutions.integrators.alfresco;
 
-import javax.faces.context.FacesContext;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.math.BigInteger;
@@ -62,13 +61,15 @@ public class AlfrescoIntegrator {
      * 
      * @param dominio IP de dominio (La palabra "localhost" también es válida).
      * @param puerto Puerto del servidor Alfresco
+     * @param rutaAlfresco Ruta donde se ubican los servicios de Alfresco
      * @param user Nombre de usuario a iniciar sesión.
      * @param pass Contraseña del usuario.
      */
-    public AlfrescoIntegrator(String dominio, int puerto, String user, String pass) {
+    public AlfrescoIntegrator(String dominio, int puerto, String rutaAlfresco, 
+            String user, String pass) {
         LOGGER.info("Inicializando Conexión...");
         
-        String urlDominio = "http://" + dominio + ":" + puerto + "/alfresco/";
+        String urlDominio = "http://" + dominio + ":" + puerto + "/" + rutaAlfresco + "/";
         
         // Crea una nueva instancia de un objeto de la clase SessionFactory.
         factory = SessionFactoryImpl.newInstance();
@@ -171,9 +172,9 @@ public class AlfrescoIntegrator {
      * necesarias para almacenarlo ahí.
      * 
      * @param rutaArchivo Ruta de la ubicación del archivo en el disco duro (Se 
- debe incluir el archivo y la extension a esta rutaDescarga).
+     * debe incluir el archivo y la extension a esta ruta).
      * @param rutaSubida Ruta de destino del archivo en el servidor Alfresco.
- Ej: /Mis Cosas/Importante (La rutaDescarga debe empezar con "/")
+     * Ej: /Mis Cosas/Importante (La ruta debe empezar con "/")
      * @throws Exception si hubo algun problema interno en la subida del
      * documento.
      */
@@ -193,11 +194,11 @@ public class AlfrescoIntegrator {
             // Se guarda el directorio raiz.
             Folder guardar = sesion.getRootFolder();
             
-            /* Se crea una variable que contendra la rutaDescarga a medida que el ciclo
+            /* Se crea una variable que contendra la ruta a medida que el ciclo
             for continue.*/
             String rutaTemp = "";
             
-            // Se recorre el arreglo de la rutaDescarga de destino.
+            // Se recorre el arreglo de la ruta de destino.
             for(int i = 1; i < subidaSplit.length; i++) {
                 
                 /* Se llena la variable temporal con el nombre del directorio
@@ -223,7 +224,7 @@ public class AlfrescoIntegrator {
                         Folder carpeta = (Folder) aux;
                         
                         /* Si el nombre de la carpeta actual es igual al de la
-                        carpeta indicada en la rutaDescarga de destino... */
+                        carpeta indicada en la ruta de destino... */
                         if(carpeta.getPath().split("/")[i].equalsIgnoreCase(subidaSplit[i])) {
                             
                             existe = true; // La bandera cambia su estado.
@@ -264,10 +265,10 @@ public class AlfrescoIntegrator {
             // Se crea un HashMap para las propiedades del documento.
             Map<String, Object> propiedades = new HashMap();
             
-            // Se obtiene la rutaDescarga de origen como objeto Path en base al String.
+            // Se obtiene la ruta de origen como objeto Path en base al String.
             Path ruta = Paths.get(rutaArchivo);
             
-            // Se obtienen los bytes del archivo en base a la rutaDescarga.
+            // Se obtienen los bytes del archivo en base a la ruta.
             byte[] datos = Files.readAllBytes(ruta);
             
             // Se definen las propiedades.
@@ -294,7 +295,8 @@ public class AlfrescoIntegrator {
             
             /* Crea el documento y lo agrega al directorio en el servidor
             Alfresco. */
-            Document doc = ((Folder)objeto).createDocument(propiedades, contenido, VersioningState.MAJOR);
+            Document doc = ((Folder)objeto).createDocument(propiedades,
+                    contenido, VersioningState.MAJOR);
             
             LOGGER.info("El documento se ha agregado correctamente.");
         }
@@ -308,18 +310,19 @@ public class AlfrescoIntegrator {
     }
     
     /**
-     * Método que permite descargar el documento desde el servidor Alfresco.
+     * Método que permite descargar un documento desde el servidor Alfresco
+     * mediante su ruta.
      * 
-     * El archivo se guarda en el directorio de descargas del sistema operativo,
-     * el cual se determina en base al nombre del mismo y al nombre del usuario
-     * que esta utilizando la aplicación.
+     * El archivo se guarda en un directorio determinado por el usuario.
      * 
      * @param rutaArchivo Ruta del archivo en el servidor Alfresco que se quiere
-     * descargar.
+     * descargar (Company Home es representado con un '/' al inicio de la ruta).
+     * @param rutaDescarga Ruta en el PC donde se descargará el documento.
      * @throws Exception si hubo algun problema interno en la descarga del
      * documento.
      */
-    public void obtenerDocumento(String rutaArchivo) throws Exception {
+    public void obtenerDocumentoPorRuta(String rutaArchivo, String rutaDescarga)
+            throws Exception {
         reconectar();
         try {
             
@@ -338,61 +341,10 @@ public class AlfrescoIntegrator {
             // Arreglo para almacenar los bytes del archivo.
             byte[] datos = IOUtils.toByteArray(input);
 
-            // Obtiene el nombre del sistema operativo.
-            String sistema = System.getProperty("os.name");
+            // Variable donde se guardará la ruta de destino del archivo.
+            Path ruta = Paths.get(rutaDescarga);
 
-            // Obtiene el usuario actual del sistema operativo.
-            String usuario = System.getProperty("user.name");
-
-            // Variable donde se guardará la rutaDescarga de destino del archivo.
-            Path ruta;
-
-            switch (sistema) { // Según el nombre del sistema...
-                case "Windows XP": // ...Si es Windows 7...
-
-                    // Utiliza la Ruta de descarga por defecto de Windows XP.
-                    ruta = Paths.get("C:/Documents and settings/" + usuario + 
-                            "/Mis documentos/Descargas");
-                    break;
-
-                case "Windows 7": // ...Si es Windows 7...
-
-                    // Utiliza la rutaDescarga de descargas por defecto de Windows 7 en adelante.
-                    ruta = Paths.get("C:/Users/" + usuario + "/Downloads/" + doc.getName());
-                    break;
-
-                case "Windows 8": // ...Si es Windows 8...
-
-                    // Utiliza la rutaDescarga de descargas por defecto de Windows 7 en adelante.
-                    ruta = Paths.get("C:/Users/" + usuario + "/Downloads/" + doc.getName());
-                    break;
-
-                case "Windows 8.1": // ...Si es Windows 8.1...
-
-                    // Utiliza la rutaDescarga de descargas por defecto de Windows 7 en adelante.
-                    ruta = Paths.get("C:/Users/" + usuario + "/Downloads/" + doc.getName());
-                    break;
-
-                case "Windows 10": // ...Si es Windows 8...
-
-                    // Utiliza la rutaDescarga de descargas por defecto de Windows 7 en adelante.
-                    ruta = Paths.get("C:/Users/" + usuario + "/Downloads/" + doc.getName());
-                    break;
-
-                case "Linux":// ...Si es Linux...
-
-                    // Utiliza la rutaDescarga de descarga por defecto de sistemas GNU/Linux.
-                    ruta = Paths.get("/home/" + usuario + "/Descargas/" + doc.getName());
-                    break;
-
-                default: // ...Por defecto...
-
-                    // Utiliza una rutaDescarga por defecto.
-                    ruta = Paths.get("/");
-                    break;
-            }
-
-            // Se escriben los datos en la rutaDescarga especificada.
+            // Se escriben los datos en la ruta especificada.
             Files.write(ruta, datos);
 
             LOGGER.info("El archivo se ha guardado correctamente en: " + ruta.toString());
@@ -408,73 +360,31 @@ public class AlfrescoIntegrator {
         }
     }
     
-    public void obtenerVariosDocumentos(String nombre, String ruta,
-            boolean caseSensitive) throws Exception {
+    /**
+     * Método que permite descargar uno o varios documentos desde el servidor
+     * Alfresco mediante el nombre del(de los) documento(s) o parte de este.
+     * 
+     * El(Los) archivo(s) se guarda(n) en un directorio determinado por el
+     * usuario.
+     * 
+     * @param nombre Todo o parte del nombre del archivo.
+     * @param rutaBusqueda Ruta en Alfresco donde se efectuará la busqueda. Esta
+     * búsqueda incluye los subdirectorios de esta ubicación (Company Home es
+     * representado con un '/' al inicio de la ruta).
+     * @param rutaDescarga Ruta en el PC donde se descargará el archivo.
+     * @param caseSensitive Indica si la búsqueda considerará mayusculas y
+     * minusculas.
+     * @throws Exception En caso de que haya ocurrido un error con la descarga.
+     */
+    public void obtenerDocumentosPorNombre(String nombre, String rutaBusqueda,
+            String rutaDescarga, boolean caseSensitive) throws Exception {
         reconectar();
-        Folder carpeta = (Folder) sesion.getObjectByPath(ruta);
+        Folder carpeta = (Folder) sesion.getObjectByPath(rutaBusqueda);
         
         List<Document> documentosEncontrados = obtenerListaDocumentos(nombre,
                 carpeta, caseSensitive);
         
         try {
-            // Obtiene el nombre del sistema operativo.
-            String sistema = System.getProperty("os.name");
-
-            // Obtiene el usuario actual del sistema operativo.
-            String usuario = System.getProperty("user.name");
-            
-            // Variable donde se guardará la rutaDescarga de destino del archivo.
-            String rutaDescarga;
-
-            switch (sistema) { // Según el nombre del sistema...
-                case "Windows XP": // ...Si es Windows XP...
-
-                    // Utiliza la ruta de descarga por defecto de Windows XP.
-                    rutaDescarga = "C:/Documents and settings/" + usuario + 
-                            "/Mis documentos/Descargas";
-                    break;
-
-                case "Windows 7": // ...Si es Windows 7...
-
-                    /* Utiliza la ruta de descargas por defecto de Windows 7 en
-                    adelante. */
-                    rutaDescarga = "C:/Users/" + usuario + "/Downloads/";
-                    break;
-
-                case "Windows 8": // ...Si es Windows 8...
-
-                    /* Utiliza la ruta de descargas por defecto de Windows 7 en
-                    adelante. */
-                    rutaDescarga = "C:/Users/" + usuario + "/Downloads/";
-                    break;
-
-                case "Windows 8.1": // ...Si es Windows 8.1...
-
-                    /* Utiliza la rutaDescarga de descargas por defecto de
-                    Windows 7 en adelante. */
-                    rutaDescarga = "C:/Users/" + usuario + "/Downloads/";
-                    break;
-
-                case "Windows 10": // ...Si es Windows 8...
-
-                    /* Utiliza la rutaDescarga de descargas por defecto de
-                    Windows 7 en adelante. */
-                    rutaDescarga = "C:/Users/" + usuario + "/Downloads/";
-                    break;
-
-                case "Linux":// ...Si es Linux...
-
-                    /* Utiliza la ruta de descarga por defecto de sistemas
-                    GNU/Linux. */
-                    rutaDescarga = "/home/" + usuario + "/Descargas/";
-                    break;
-
-                default: // ...Por defecto...
-
-                    // Utiliza una ruta por defecto.
-                    rutaDescarga = "/";
-                    break;
-            }
             
             for(Document aux : documentosEncontrados) {
                 // Se obtiene el ContentStream del documento.
@@ -488,7 +398,7 @@ public class AlfrescoIntegrator {
                 
                 Path rutaArchivo = Paths.get(rutaDescarga + aux.getName());
                 
-                // Se escriben los datos en la rutaDescarga especificada.
+                // Se escriben los datos en la ruta especificada.
                 Files.write(rutaArchivo, datos);
 
                 LOGGER.info("El archivo se ha guardado correctamente en: "
@@ -507,6 +417,21 @@ public class AlfrescoIntegrator {
         }
     }
     
+    /**
+     * Busca y obtiene una lista de documentos desde una ubicación dentro del
+     * servidor Alfresco.
+     * 
+     * Esta búsqueda incluye los subdirectorios de la ubicación escogida para
+     * buscar. Además, este método es recursivo para poder lograr esto.
+     * 
+     * @param nombre Todo o parte del nombre del archivo.
+     * @param carpetaActual Ubicación en la que se encuentra actualmente
+     * buscando.
+     * @param caseSensitive Indica si la búsqueda considerará mayusculas y
+     * minusculas.
+     * @return Una lista de objetos de la clase Document que contengan el nombre
+     * recibido por parámetro
+     */
     private List<Document> obtenerListaDocumentos(String nombre,
             Folder carpetaActual, boolean caseSensitive) {
         List<Document> listaDocumentos = new ArrayList();
