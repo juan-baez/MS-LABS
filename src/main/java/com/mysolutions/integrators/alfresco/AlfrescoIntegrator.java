@@ -34,17 +34,12 @@ import org.apache.chemistry.opencmis.commons.exceptions.CmisConnectionException;
 import org.apache.chemistry.opencmis.commons.exceptions.CmisPermissionDeniedException;
 import org.apache.chemistry.opencmis.commons.exceptions.CmisRuntimeException;
 import org.apache.chemistry.opencmis.commons.impl.dataobjects.ContentStreamImpl;
-import org.apache.commons.io.IOUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author mysolutions
  */
 public class AlfrescoIntegrator {
-    private static final Logger LOGGER =
-            LoggerFactory.getLogger(AlfrescoIntegrator.class);
     
     // Atributos para la sesión de Alfresco.
     
@@ -67,7 +62,6 @@ public class AlfrescoIntegrator {
      */
     public AlfrescoIntegrator(String dominio, int puerto, String rutaAlfresco, 
             String user, String pass) {
-        LOGGER.info("Inicializando Conexión...");
         
         String urlDominio = "http://" + dominio + ":" + puerto + "/" + rutaAlfresco + "/";
         
@@ -82,7 +76,7 @@ public class AlfrescoIntegrator {
         parameter.put(SessionParameter.USER, user);
         parameter.put(SessionParameter.PASSWORD, pass);
         
-        // Datos de conexión para conectarse con CMIS.
+        // Datos de conexión para conectarse con CMIS (Alfresco ver. 3.2).
         parameter.put(SessionParameter.ATOMPUB_URL,
                 urlDominio + "service/api/cmis");
 
@@ -95,14 +89,11 @@ public class AlfrescoIntegrator {
             conectar a el. */
             sesion = factory.getRepositories(parameter).get(0).createSession();
             
-            LOGGER.info("Conexion iniciada.");
-            
         }
         
         // Excepciones en caso de credenciales invalidas.
         catch(CmisRuntimeException | CmisPermissionDeniedException ex) { 
             
-            LOGGER.error("Credenciales invalidas.");
             throw ex;
             
         }
@@ -110,7 +101,6 @@ public class AlfrescoIntegrator {
         // Excepción en caso de problemas de conexión.
         catch(CmisConnectionException ex) { 
             
-            LOGGER.error("No se puede conectar a " + dominio + ". Dominio inexistente o no disponible actualmente.");
             throw ex;
             
         }
@@ -118,7 +108,6 @@ public class AlfrescoIntegrator {
         // Excepción en caso de otros errores.
         catch(Exception ex) { 
             
-            LOGGER.error("Error desconocido.");
             throw ex;
             
         }
@@ -131,7 +120,6 @@ public class AlfrescoIntegrator {
             sesion.getRootFolder();
         }
         catch(Exception ex) {
-            LOGGER.info("La sesión de Alfresco ha expirado. Reconectando...");
             sesionAgotada = true;
         }
         
@@ -142,14 +130,11 @@ public class AlfrescoIntegrator {
                 conectar a el. */
                 sesion = factory.getRepositories(parameter).get(0).createSession();
 
-                LOGGER.info("Reconeción exitosa.");
-
             }
 
             // Excepción en caso de problemas de conexión.
             catch(CmisConnectionException ex) { 
 
-                LOGGER.error("No se puede reconectar al servidor Alfresco. Verifique conexión de red.");
                 throw ex;
 
             }
@@ -157,7 +142,6 @@ public class AlfrescoIntegrator {
             // Excepción en caso de otros errores.
             catch(Exception ex) { 
 
-                LOGGER.error("Error desconocido.");
                 throw ex;
 
             }
@@ -238,9 +222,6 @@ public class AlfrescoIntegrator {
                 
                 if(!existe) { // Si la carpeta ubicada no existe...
                     
-                    // ...Se notifica que el directorio se creará.
-                    LOGGER.warn("Directorio " + subidaSplit[i] + " no existe. Creando...");
-                    
                     // Se crean las propiedades para ese directorio.
                     Map<String, Object> propCarpeta = new HashMap();
                     
@@ -295,16 +276,14 @@ public class AlfrescoIntegrator {
             
             /* Crea el documento y lo agrega al directorio en el servidor
             Alfresco. */
-            Document doc = ((Folder)objeto).createDocument(propiedades,
-                    contenido, VersioningState.MAJOR);
-            
-            LOGGER.info("El documento se ha agregado correctamente.");
+            ((Folder)objeto).createDocument(propiedades,contenido,
+                    VersioningState.MAJOR);
         }
         
         /* Excepción en caso de que ocurra un error durante el proceso. Deja un
         mensaje en el Logger y vuelve a lanzar la excepción.*/
         catch(Exception ex) { 
-            LOGGER.error("No se ha podido agregar el documento" + ex.getLocalizedMessage());
+            
             throw ex;
         }
     }
@@ -313,108 +292,44 @@ public class AlfrescoIntegrator {
      * Método que permite descargar un documento desde el servidor Alfresco
      * mediante su ruta.
      * 
-     * El archivo se guarda en un directorio determinado por el usuario.
-     * 
-     * @param rutaArchivo Ruta del archivo en el servidor Alfresco que se quiere
-     * descargar (Company Home es representado con un '/' al inicio de la ruta).
-     * @param rutaDescarga Ruta en el PC donde se descargará el documento.
-     * @throws Exception si hubo algun problema interno en la descarga del
-     * documento.
+     * @param rutaCompletaArchivo Ruta del archivo en el servidor Alfresco que
+     * se quiere descargar. Esta debe incluir el nombre del archivo y su
+     * extensión. 
+     * (Company Home es representado con un '/' al inicio de la ruta).
+     * @return El documento encontrado, o null, si no lo encontró.
      */
-    public void obtenerDocumentoPorRuta(String rutaArchivo, String rutaDescarga)
-            throws Exception {
+    public Document obtenerDocumentoPorRuta(String rutaCompletaArchivo) {
         reconectar();
-        try {
-            
-            // Se obtene el archivo de la rutaDescarga ingresada.
-            CmisObject objeto = sesion.getObjectByPath(rutaArchivo);
-            
-            // Se transforma a un objeto de la clase Document.
-            Document doc = (DocumentImpl) objeto;
-            
-            // Se obtiene el ContentStream del documento.
-            ContentStream contenido = doc.getContentStream();
-            
-            // Se obtiene el InputStream del ContentStream.
-            InputStream input = contenido.getStream();
-            
-            // Arreglo para almacenar los bytes del archivo.
-            byte[] datos = IOUtils.toByteArray(input);
+        // Se obtene el archivo de la rutaDescarga ingresada.
+        CmisObject objeto = sesion.getObjectByPath(rutaCompletaArchivo);
 
-            // Variable donde se guardará la ruta de destino del archivo.
-            Path ruta = Paths.get(rutaDescarga);
-
-            // Se escriben los datos en la ruta especificada.
-            Files.write(ruta, datos);
-
-            LOGGER.info("El archivo se ha guardado correctamente en: " + ruta.toString());
-        }
+        // Se transforma a un objeto de la clase Document.
+        Document doc = (DocumentImpl) objeto;
         
-        /* Excepción en caso de que ocurra un error durante el proceso. Deja un 
-        mensaje en el Logger y vuelve a lanzar la excepción. */
-        catch(Exception ex) { 
-            
-            LOGGER.error("No se pudo descargar el archivo: " + ex.getLocalizedMessage());
-            throw ex;
-            
-        }
+        return doc;
     }
     
     /**
      * Método que permite descargar uno o varios documentos desde el servidor
      * Alfresco mediante el nombre del(de los) documento(s) o parte de este.
      * 
-     * El(Los) archivo(s) se guarda(n) en un directorio determinado por el
-     * usuario.
-     * 
      * @param nombre Todo o parte del nombre del archivo.
      * @param rutaBusqueda Ruta en Alfresco donde se efectuará la busqueda. Esta
      * búsqueda incluye los subdirectorios de esta ubicación (Company Home es
      * representado con un '/' al inicio de la ruta).
-     * @param rutaDescarga Ruta en el PC donde se descargará el archivo.
      * @param caseSensitive Indica si la búsqueda considerará mayusculas y
      * minusculas.
-     * @throws Exception En caso de que haya ocurrido un error con la descarga.
+     * @return Una lista con los documentos encontrados
      */
-    public void obtenerDocumentosPorNombre(String nombre, String rutaBusqueda,
-            String rutaDescarga, boolean caseSensitive) throws Exception {
+    public List<Document> obtenerDocumentosPorNombre(String nombre,
+            String rutaBusqueda, boolean caseSensitive) {
         reconectar();
         Folder carpeta = (Folder) sesion.getObjectByPath(rutaBusqueda);
         
         List<Document> documentosEncontrados = obtenerListaDocumentos(nombre,
                 carpeta, caseSensitive);
         
-        try {
-            
-            for(Document aux : documentosEncontrados) {
-                // Se obtiene el ContentStream del documento.
-                ContentStream contenido = aux.getContentStream();
-
-                // Se obtiene el InputStream del ContentStream.
-                InputStream input = contenido.getStream();
-
-                // Arreglo para almacenar los bytes del archivo.
-                byte[] datos = IOUtils.toByteArray(input);
-                
-                Path rutaArchivo = Paths.get(rutaDescarga + aux.getName());
-                
-                // Se escriben los datos en la ruta especificada.
-                Files.write(rutaArchivo, datos);
-
-                LOGGER.info("El archivo se ha guardado correctamente en: "
-                        + rutaArchivo.toString());
-            }
-        }
-        
-        /* Excepción en caso de que ocurra un error durante el proceso. Deja un 
-        mensaje en el Logger y vuelve a lanzar la excepción. */
-        catch(Exception ex) { 
-            
-            LOGGER.error("No se pudo descargar el archivo: " +
-                    ex.getLocalizedMessage());
-            throw ex;
-            
-        }
+        return documentosEncontrados;
     }
     
     /**
