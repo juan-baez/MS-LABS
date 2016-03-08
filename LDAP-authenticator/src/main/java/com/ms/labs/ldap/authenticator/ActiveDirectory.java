@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package activedirectory;
+package com.ms.labs.ldap.authenticator;
 
 import java.util.Properties;
 import java.util.logging.Logger;
